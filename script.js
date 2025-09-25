@@ -191,6 +191,7 @@ function startSpin() {
             // out.innerHTML = prize === "nem nyert"
             //     ? `😕 <span class="accent">${prize}</span>`
             //     : `🎉 Nyeremény: <span class="accent">${prize}</span>`;
+            out.textContent = '';
             openModal(prize);
         }
     }
