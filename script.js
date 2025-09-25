@@ -1,73 +1,25 @@
-// ---- Oldalsó "Csak a Baross" feliratok véletlen elhelyezése ----
-(() => {
-    const neonL = document.querySelector('.neon-left');
-    const neonR = document.querySelector('.neon-right');
-    const card = document.querySelector('.card');
-    if (!neonL || !neonR || !card) return;
-
-    const GAP = 16;                  // távolság a kártya szélétől
-    const RELOCATE_EVERY_MS = 2000;  // 5 mp-enként új hely
-
-    const rand = (a, b) => Math.random() * (b - a) + a;
-
-    const sizeOf = (el) => {
-        const prev = el.style.transform;
-        el.style.transform = 'none';
-        const w = el.offsetWidth, h = el.offsetHeight;
-        el.style.transform = prev;
-        return { w, h };
-    };
-
-    function placeNeons() {
-        const rect = card.getBoundingClientRect();
-        const vw = innerWidth, vh = innerHeight;
-
-        // BAL oldal
-        {
-            const { w, h } = sizeOf(neonL);
-            const y = Math.max(h / 2, Math.min(vh - h / 2, rand(rect.top + 10, rect.bottom - 10)));
-            const x = Math.max(0, rect.left - w - GAP);
-            const angle = rand(-70, -20);
-            neonL.style.left = `${x}px`;
-            neonL.style.top = `${Math.round(y - h / 2)}px`;
-            neonL.style.transform = `rotate(${angle}deg)`;
-        }
-        // JOBB oldal
-        {
-            const { w, h } = sizeOf(neonR);
-            const y = Math.max(h / 2, Math.min(vh - h / 2, rand(rect.top + 10, rect.bottom - 10)));
-            const x = Math.min(vw - w, rect.right + GAP);
-            const angle = rand(20, 70);
-            neonR.style.left = `${x}px`;
-            neonR.style.top = `${Math.round(y - h / 2)}px`;
-            neonR.style.transform = `rotate(${angle}deg)`;
-        }
-    }
-
-    placeNeons();
-    addEventListener('resize', () => {
-        clearTimeout(window.__neonPlaceTO);
-        window.__neonPlaceTO = setTimeout(placeNeons, 120);
-    });
-    setInterval(placeNeons, RELOCATE_EVERY_MS);
-})();
-
 // =========================
-//  Szerencsekerék (8 szelet)
+//  Dinamikus Szerencsekerék
 // =========================
 
-// --- Beállítások ---
-const prizes = [
-    "csoki", "nem nyert", "cukorka", "nem nyert",
-    "toll", "nem nyert", "hűtőmágnes", "nem nyert"
-];
-const colors = ["#f59e0b", "#ef4444", "#22c55e", "#3b82f6", "#a855f7", "#eab308", "#14b8a6", "#f97316"];
+// <<< ITT ÁLLÍTOD: a valódi nyeremények listája >>>
+const basePrizes = ["egérpad", "karszalag", "mobil tartó", "kulcstartó", "csoki", "cukor"];
 
+// --- A "nem nyert" automatikus hozzáadása (ugyanannyi, mint a nyeremények) ---
+let slices = basePrizes.flatMap(p => [p, "nem nyert"]); // [nyer, nem, nyer, nem, ...]
+
+// --- Dinamikus színpaletta (HSL) a szeletekhez ---
+function makeColors(n) {
+    return Array.from({ length: n }, (_, i) => `hsl(${Math.round((360 / n) * i)}, 85%, 55%)`);
+}
+let colors = makeColors(slices.length);
+
+// Canvas
 const canvas = document.getElementById("wheel");
 const ctx = canvas.getContext("2d");
 const out = document.getElementById("out");
 
-// HiDPI méretezés
+// HiDPI
 function fitHiDPI() {
     const ratio = window.devicePixelRatio || 1;
     const size = Math.min(canvas.clientWidth || canvas.width, canvas.clientHeight || canvas.height);
@@ -80,15 +32,20 @@ function fitHiDPI() {
 fitHiDPI();
 addEventListener("resize", fitHiDPI);
 
-const N = 8;
+// Hasznos rövidítések: mindig a JELENLEGI szeletszámmal dolgozunk
 const TAU = Math.PI * 2;
-const SLICE = TAU / N;
+const EPS = 1e-10;
+const currentN = () => slices.length;
+const currentAng = () => TAU / currentN();
 
 let angle = 0;
 let spinning = false;
 
 // Kerék rajz
 function drawWheel() {
+    const N = currentN();
+    const SLICE = currentAng();
+
     const size = Math.min(canvas.width, canvas.height) / (window.devicePixelRatio || 1);
     const r = size / 2 - 10;
     const cx = size / 2;
@@ -99,7 +56,63 @@ function drawWheel() {
     ctx.translate(cx, cy);
     ctx.rotate(angle);
 
+    // — felirat rajzolása (auto-kisebbítés + opcionális 2 sor)
+    function drawLabelCentered(label, maxWidthPx) {
+        let fontSize = 22;
+        ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+
+        while (ctx.measureText(label).width > maxWidthPx && fontSize > 12) {
+            fontSize -= 1;
+            ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+        }
+
+        let lines = [label];
+        if (ctx.measureText(label).width > maxWidthPx && label.includes(' ')) {
+            const words = label.split(' ');
+            let best = [label], minOver = Infinity;
+            for (let i = 1; i < words.length; i++) {
+                const l1 = words.slice(0, i).join(' ');
+                const l2 = words.slice(i).join(' ');
+                const w1 = ctx.measureText(l1).width;
+                const w2 = ctx.measureText(l2).width;
+                const over = Math.max(w1, w2) - maxWidthPx;
+                if (over < minOver) { minOver = over; best = [l1, l2]; }
+            }
+            lines = best;
+            while ((ctx.measureText(lines[0]).width > maxWidthPx || ctx.measureText(lines[1]).width > maxWidthPx) && fontSize > 10) {
+                fontSize -= 1;
+                ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+            }
+        }
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.lineJoin = 'round';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = Math.max(1, Math.round(fontSize * 0.2));
+
+        const strokeW = Math.max(1, Math.round(fontSize * 0.07));
+        ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+        ctx.fillStyle = '#ffffff';
+        ctx.lineWidth = strokeW;
+
+        if (lines.length === 1) {
+            ctx.strokeText(lines[0], 0, 0);
+            ctx.fillText(lines[0], 0, 0);
+        } else {
+            const lh = Math.round(fontSize * 1.12);
+            ctx.strokeText(lines[0], 0, -lh / 2);
+            ctx.fillText(lines[0], 0, -lh / 2);
+            ctx.strokeText(lines[1], 0, lh / 2);
+            ctx.fillText(lines[1], 0, lh / 2);
+        }
+        ctx.shadowBlur = 0;
+    }
+
     for (let i = 0; i < N; i++) {
+        // szelet
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.arc(0, 0, r, i * SLICE, (i + 1) * SLICE);
@@ -107,30 +120,29 @@ function drawWheel() {
         ctx.fillStyle = colors[i % colors.length];
         ctx.fill();
 
-        ctx.strokeStyle = "rgba(0,0,0,.35)";
+        // elválasztó
+        ctx.strokeStyle = 'rgba(0,0,0,.35)';
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // címke
+        // felirat
         ctx.save();
         ctx.rotate(i * SLICE + SLICE / 2);
-        ctx.textAlign = "right";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = "#0b1020";
-        ctx.font = "bold 18px system-ui, sans-serif";
-        const label = prizes[i];
+        const radiusLabel = r * 0.65;
+        const arcWidth = Math.min(r * 0.9 - 24, radiusLabel * SLICE * 0.9);
+        ctx.translate(radiusLabel, 0);
         ctx.rotate(-Math.PI / 2);
-        ctx.fillText(label, r - 22, 0);
+        drawLabelCentered(slices[i], arcWidth);
         ctx.restore();
     }
 
     // közép dísz
     ctx.beginPath();
     ctx.arc(0, 0, 34, 0, TAU);
-    ctx.fillStyle = "#0ea5e9";
+    ctx.fillStyle = '#0ea5e9';
     ctx.fill();
     ctx.lineWidth = 4;
-    ctx.strokeStyle = "rgba(255,255,255,.65)";
+    ctx.strokeStyle = 'rgba(255,255,255,.65)';
     ctx.stroke();
 
     ctx.restore();
@@ -141,42 +153,45 @@ drawWheel();
 const easeInOutCubic = (t) =>
     t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-// Indítás
+// Indítás — minden a JELENLEGI szeletszám alapján számol
 function startSpin() {
     if (spinning) return;
     spinning = true;
     out.textContent = "Pörög…";
 
-    const now = performance.now();
-    const duration = 4200 + Math.random() * 1200; // 4.2–5.4 s
-    const fullTurns = 4 + Math.floor(Math.random() * 3); // 4–6 fordulat
-    const targetIndex = Math.floor(Math.random() * N);
-    const targetAngle = targetIndex * SLICE + SLICE / 2;
+    const duration = 4200 + Math.random() * 1200;
+    const startAngle = angle;
+    const extraRot = (4 + Math.random() * 2) * TAU + Math.random() * TAU; // 4–6 fordulat + véletlen
+    const endAngle = startAngle + extraRot;
 
-    const current = ((angle % TAU) + TAU) % TAU;
-    const delta = ((targetAngle - current) % TAU + TAU) % TAU;
-    const endAngleAbsolute = angle + fullTurns * TAU + (TAU - delta);
-    const totalDelta = endAngleAbsolute - angle;
+    const N = currentN();
+    const SLICE = currentAng();
 
-    function frame(t) {
-        const k = Math.min(1, (t - now) / duration);
+    function frame(now) {
+        const k = Math.min(1, (performance.now() - (frame.t0 ?? (frame.t0 = now))) / duration);
         const eased = easeInOutCubic(k);
-        angle = angle + (totalDelta * (eased - (k === 0 ? 0 : easeInOutCubic((t - now - 16) / duration))));
-        // A fenti kettős ease-trükk helyett egyszerűbb:
-        angle = ((current) + totalDelta * eased); // tartósan sima
-
+        angle = startAngle + (endAngle - startAngle) * eased;
         drawWheel();
+
         if (k < 1) {
             requestAnimationFrame(frame);
         } else {
             spinning = false;
+
+            // Mutató felfelé (−π/2) — stabil index EPS-szel
+            const pointerAngle = -Math.PI / 2;
             const final = ((angle % TAU) + TAU) % TAU;
-            const landedIndex = Math.floor(((TAU - final) % TAU) / SLICE);
-            const prize = prizes[landedIndex];
-            out.innerHTML =
-                prize === "nem nyert"
-                    ? `😕 <span class="accent">${prize}</span>`
-                    : `🎉 Nyeremény: <span class="accent">${prize}</span>`;
+            const rel = (pointerAngle - final + TAU) % TAU;
+
+            let idx = Math.floor((rel + EPS) / SLICE);
+            if (idx < 0) idx = 0;
+            if (idx >= N) idx = N - 1;
+
+            const prize = slices[idx];
+            // out.innerHTML = prize === "nem nyert"
+            //     ? `😕 <span class="accent">${prize}</span>`
+            //     : `🎉 Nyeremény: <span class="accent">${prize}</span>`;
+            openModal(prize);
         }
     }
     requestAnimationFrame(frame);
@@ -187,3 +202,41 @@ addEventListener("keydown", (e) => {
     if (e.code === "Enter" || e.code === "Space") startSpin();
 });
 
+// ===== MODAL vezérlés =====
+const modal = document.getElementById('prize-modal');
+const modalCard = modal.querySelector('.modal-card');
+const modalCloseBtn = modal.querySelector('.modal-close');
+const prizeTextSpan = document.getElementById('prize-text');
+const prizeSub = document.getElementById('prize-sub');
+
+function openModal(prize) {
+    // Szövegek
+    if (prize === 'nem nyert') {
+        prizeTextSpan.textContent = 'Nem nyert';
+        prizeSub.textContent = 'Próbáld újra!';
+    } else {
+        prizeTextSpan.textContent = prize;
+        prizeSub.textContent = 'Gratulálunk!';
+    }
+
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    // fókusz a kártyára, hogy Esc működjön képernyőn
+    setTimeout(() => modalCard.focus(), 0);
+}
+
+function closeModal() {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+}
+
+// Bezárás események
+modalCloseBtn.addEventListener('click', closeModal);
+modal.addEventListener('click', (e) => {
+    if (e.target === modal || e.target.classList.contains('modal-backdrop')) closeModal();
+});
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal.classList.contains('open')) closeModal();
+});

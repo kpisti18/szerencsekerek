@@ -65,8 +65,9 @@ canvas {
     height: 0;
     border-left: 16px solid transparent;
     border-right: 16px solid transparent;
-    border-bottom: 22px solid var(--accent);
-    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .4));
+    border-top: 22px solid rgb(195, 219, 39);
+    /* <-- ez lett a border-top */
+    filter: drop-shadow(0 4px 6px rgba(224, 228, 101, 0.4));
 }
 
 .result {
@@ -266,5 +267,90 @@ canvas {
 
     to {
         filter: hue-rotate(360deg)
+    }
+}
+
+/* ===== MODAL (felugró ablak) ===== */
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: none;
+}
+
+.modal.open {
+    display: block;
+}
+
+.modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, .55);
+    backdrop-filter: blur(2px);
+}
+
+.modal-card {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) scale(.92);
+    width: min(92vw, 720px);
+    background: var(--card);
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 18px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .55);
+    padding: 24px 18px 28px;
+    animation: modalIn .22s ease-out forwards;
+    outline: none;
+}
+
+@keyframes modalIn {
+    to {
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.modal-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .08);
+    color: var(--text);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.modal-close:hover {
+    background: rgba(255, 255, 255, .14);
+}
+
+/* A cím neon-hatása marad, de méretben visszafogottabb */
+.modal-title {
+    margin: 6px 0 8px;
+    font-size: clamp(36px, 7vw, 96px);
+    /* kisebb, mint a fő h1 */
+}
+
+/* Alfelirat */
+.modal-sub {
+    text-align: center;
+    font-size: clamp(16px, 2.6vw, 22px);
+    opacity: .85;
+}
+
+/* Mobil */
+@media (max-width: 420px) {
+    .modal-card {
+        padding: 18px 14px 22px;
+    }
+
+    .modal-close {
+        top: 6px;
+        right: 8px;
     }
 }
